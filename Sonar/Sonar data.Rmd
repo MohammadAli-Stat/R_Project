@@ -1,0 +1,301 @@
+---
+title: "Supervised Learning with Sonar Data"
+author: "Mohammad Ali Mirzaie"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+email: mohammadali.mirzaie2000@gmail.com
+---
+
+Hello everyone, I am `Mohammad Ali Mirzaie`. I earned my bachelor's degree in Statistic and now I am studying for a master's degree in data science. I am interested in the field of machine learning.
+
+In this study, we aim to use `Sonar` data from the `mlbench` package and predict new observations using `Supervised Learning` methods. First, let's briefly discuss the data. Sonar is naval tool used for underwater detection. the Sonar system has 60 frequency bands and is used to predict whether an object is `Rock (R)` or `Metal (M)`. Also Sonar stands for `Sound Navigation & Ranging`. This tool is sometimes used for detecting the mines underwater. Before analyzing the data, we need to load the required packages.
+
+```{r message=FALSE, warning=FALSE}
+# install.packages('caret',dep = T)
+# install.packages('mlbench',dep = T)
+library(caret)
+data(Sonar, package = 'mlbench')
+names(Sonar)
+```
+
+```{r}
+dim(Sonar)
+sum(is.na(Sonar))
+```
+
+We have 208 observations and 61 variables. 60 variables for sound frequencies (predictors) and one variable for class (binary outcome). Fortunately, there is no missing value in data.
+
+```{r}
+table(Sonar$Class)
+prop.table(table(Sonar$Class))
+```
+
+Now we splitting the data with train and test. We propose 80% for train and 20% for test. also we use `set.seed(1)` for random seed of data generation.
+
+```{r}
+set.seed(1)
+t = sample(208, 208*0.8)
+train = Sonar[t,]
+test = Sonar[-t,]
+table('train' = train$Class)
+table('test' = test$Class)
+```
+
+After that, we need to train the data with corresponding model. We propose the following models:
+
+`PLS: Partial Least Squares`,
+
+`RDA: Reguralised Discriminant Analysis`,
+
+`LDA: Linear Discriminant Analisys`,
+
+`QDA: Quadratic Discriminant Analisys`,
+
+`NB: Naive Bayes`.
+
+The train control parameters for this process are:
+
+```{r}
+ctrl = trainControl(
+  method = 'repeatedcv',
+  number = 10,
+  repeats = 5,
+  classProbs = T,
+  summaryFunction = twoClassSummary,
+  verboseIter = F,
+  savePredictions = T
+)
+```
+
+We set `Repeated Cross Validation` with 10 folds and 5 repeats. Also we set `two class summary` function.
+
+Now we are ready for modeling.\
+**PLS**:
+
+```{r}
+pls.fit = train(
+  Class ~ .,
+  data = train,
+  method = 'pls',
+  preProcess = c('center','scale'),
+  tuneGrid = expand.grid(ncomp = 1:15),
+  trControl = ctrl,
+  metric = 'ROC'
+)
+```
+
+**RDA**:
+
+```{r}
+rda.fit = train(
+  Class ~ .,
+  data = train,
+  method = 'rda',
+  preProcess = c('center','scale'),
+  tuneGrid = expand.grid(
+    gamma = seq(0, 1, 0.2), lambda = seq(0, 1, 0.2)
+    ),
+  trControl = ctrl,
+  metric = 'ROC'
+)
+```
+
+**LDA**:
+
+```{r}
+lda.fit = train(
+  Class ~ .,
+  data = train,
+  method = 'lda',
+  preProcess = c('center','scale'),
+  trControl = ctrl,
+  metric = 'ROC'
+)
+```
+
+**QDA**:
+
+```{r}
+qda.fit = train(
+  Class ~ .,
+  data = train,
+  method = 'qda',
+  preProcess = c('center','scale'),
+  trControl = ctrl,
+  metric = 'ROC'
+)
+```
+
+**NB**:
+
+```{r message=FALSE, warning=FALSE}
+nb.fit = train(
+  Class ~ .,
+  data = train,
+  method = 'nb',
+  preProcess = c('center','scale'),
+  tuneGrid = expand.grid(
+    fL = c(0, 0.5, 1),
+    usekernel = c(T,F),
+    adjust = c(0.5, 1, 1.5)
+    ),
+  trControl = ctrl,
+  metric = 'ROC'
+)
+```
+
+In addition, our goal is to observe the accuracy of the models. For this manner we use corresponding `accuracy plot`, `summary`, and `summary of confussion matrix`:\
+**PLS**:
+
+```{r}
+ggplot(pls.fit)
+```
+
+```{r}
+pls.fit
+```
+
+```{r}
+pls.pre = predict(pls.fit, test)
+confusionMatrix(pls.pre, test$Class)
+```
+
+**RDA**:
+
+```{r}
+ggplot(rda.fit)
+```
+
+```{r}
+rda.fit
+```
+
+```{r}
+rda.pre = predict(rda.fit, test)
+confusionMatrix(rda.pre, test$Class)
+```
+
+**LDA**:
+
+```{r}
+lda.fit
+```
+
+```{r}
+lda.pre = predict(lda.fit, test)
+confusionMatrix(lda.pre, test$Class)
+```
+
+**QDA**:
+
+```{r}
+qda.fit
+```
+
+```{r}
+qda.pre = predict(qda.fit, test)
+confusionMatrix(qda.pre, test$Class)
+```
+
+**NB**:
+
+```{r}
+ggplot(nb.fit)
+```
+
+```{r}
+nb.fit
+```
+
+```{r warning=FALSE}
+nb.pre = predict(nb.fit, test)
+confusionMatrix(nb.pre, test$Class)
+```
+
+Finally, our goal is to compare the models and find the best model, so we have:
+
+```{r}
+resamp = resamples(list(PLS = pls.fit, RDA = rda.fit, LDA = lda.fit, QDA = qda.fit, NB = nb.fit))
+summary(resamp)
+```
+
+And for graphical comparing we have:
+
+**Box-Whisker Plot**:
+
+```{r}
+bwplot(resamp, layout = c(3,1))
+```
+
+**Density Plot**:
+
+```{r}
+densityplot(resamp, layout = c(1,3), auto.key = list(column = 1))
+```
+
+**Scatter Plot Matrix**:
+
+```{r}
+splom(resamp)
+```
+
+After that, for testing the differences between proposed models we have:
+
+```{r}
+difresamp = diff(resamp)
+summary(difresamp)
+```
+
+Now, the graphical summary of this is:\
+**Box-Whisker Plot for difference**:
+
+```{r}
+bwplot(difresamp, layout = c(3,1))
+```
+
+**Density Plot for difference**:
+
+```{r}
+densityplot(difresamp, layout = c(1,3), auto.key = list(column = 1))
+```
+
+We observe that `PLS`, `NB`, and `RDA` have same accuracy. We choose `PLS` because it is used dimension reduction for modeling. In `RDA` has not dimension reduction property and if we have multicollinearity, interpretation of coefficients are difficult. For `NB` we have to use kernel estimation for 60 variables and mutually exclusive independence between variables. It is surprising that, we assume mutually exclusive independence between variables! So our final model is `PLS` with the best tune parameter. `(ncomp = 4)`
+
+```{r}
+pls.fit$bestTune
+```
+
+```{r}
+pls.final = train(
+  Class ~ .,
+  data = Sonar,
+  method = 'pls',
+  preProcess = c('center','scale'),
+  tuneGrid = data.frame(ncomp = 4),
+  metric = 'ROC',
+  trControl = trainControl(
+    method = 'none',
+    classProbs = T,
+    summaryFunction = twoClassSummary,
+    verboseIter = F,
+    savePredictions = T
+    )
+)
+```
+
+And for summary of final model we have:
+
+```{r}
+pls.final.pred = predict(pls.final, Sonar)
+confusionMatrix(pls.final.pred, Sonar$Class)
+```
+
+Our model accuracy is 82.54% (Sens = 86.49% and Spec = 86.60%), which is good result.
+
+Thank you for your attention.
+
+Best regards
+
+**email: [mohammadali.mirzaie2000\@gmail.com](mailto:mohammadali.mirzaie2000@gmail.com){.email}**
